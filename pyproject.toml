@@ -1,0 +1,14 @@
+[project]
+name = "unsupervise"
+version = "0.1.0"
+description = "unsupervised learning project"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=2.0.2",
+    "pillow>=11.3.0",
+    "scikit-learn>=1.6.1",
+    "torch>=2.8.0",
+    "matplotlib>=3.10.0",
+    "torchvision>=0.23.0",
+]
