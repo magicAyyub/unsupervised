@@ -18,6 +18,21 @@ class KMeans(BaseModel):
         self.random_state = random_state
         self.centroids: np.ndarray | None = None  # shape (n_clusters, n_features) once fitted
 
+    def _assign(self, X: np.ndarray) -> np.ndarray:
+        """
+        Assigns each sample in X to the nearest centroid.
+
+        Args:
+            X: shape (n_samples, n_features)
+
+        Returns:
+            labels: shape (n_samples,) containing the cluster index for each sample.
+        """
+        distances = np.empty((X.shape[0], self.n_clusters))
+        for k in range(self.n_clusters):
+            distances[:, k] = np.linalg.norm(X - self.centroids[k], axis=1)
+        return np.argmin(distances, axis=1)
+
     def fit(self, X: np.ndarray) -> "KMeans":
         """
         Learns the centroids from the data X.
@@ -36,10 +51,7 @@ class KMeans(BaseModel):
 
         for iteration in range(self.max_iter):
             # Assigner chaque point au centroïde le plus proche
-            distances = np.empty((X.shape[0], self.n_clusters))
-            for k in range(self.n_clusters):
-                distances[:, k] = np.linalg.norm(X - self.centroids[k], axis=1)
-            labels = np.argmin(distances, axis=1)
+            labels = self._assign(X)
 
             # Recalculer les centroïdes
             new_centroids = np.empty_like(self.centroids)
@@ -73,10 +85,7 @@ class KMeans(BaseModel):
         if self.centroids is None:
             raise ValueError("The model must be fitted before encoding.")
 
-        distances = np.empty((X.shape[0], self.n_clusters))
-        for k in range(self.n_clusters):
-            distances[:, k] = np.linalg.norm(X - self.centroids[k], axis=1)
-        labels = np.argmin(distances, axis=1)
+        labels = self._assign(X)
 
         return Latent(array=labels, nature="discrete")
 

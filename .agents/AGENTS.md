@@ -39,7 +39,9 @@ La dataclass `Latent` modélise les représentations compressées des données :
 * Attributs :
   * `array: np.ndarray` (le tenseur latent).
   * `nature: str` (`"discrete"` pour K-Means, `"continuous"` pour PCA et AutoEncoder).
-* Propriété : `n_bytes` retourne la taille de stockage optimale estimée. Pour un espace discret (K-Means), elle simule un codage optimal (ex: `uint8` si $K \le 256$) plutôt que d'utiliser le type d'entier brute de NumPy.
+* Propriété : `n_bytes` retourne la taille de stockage optimale estimée :
+  * Pour un espace discret (K-Means), elle simule un codage d'entiers optimal (ex: `uint8` si $K \le 256$, `uint16` si $K \le 65536$) plutôt que d'utiliser le type d'entier brut de NumPy.
+  * Pour un espace continu (PCA, AutoEncoder), elle force le calcul en précision `float32` (4 octets par valeur) afin de standardiser le format de stockage cible et de garantir l'équité de la comparaison, même si NumPy utilise du `float64` lors des calculs intermédiaires.
 
 ---
 
