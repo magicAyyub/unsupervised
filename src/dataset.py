@@ -10,8 +10,7 @@ def load_mnist_dataset(data_dir="data", train=True, download=True, shuffle=True,
         dataloader: PyTorch DataLoader of MNIST images and labels
     """
     transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.1307,), (0.3081,))  # MNIST mean and std
+        transforms.ToTensor()
     ])
     
     dataset = torchvision.datasets.MNIST(
@@ -24,18 +23,14 @@ def load_mnist_dataset(data_dir="data", train=True, download=True, shuffle=True,
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
     return dataloader
 
-def load_shapes_dataset(data_dir="./shapes_hard_color", shuffle=True, batch_size=64) -> DataLoader:
+def load_shapes_dataset(data_dir="./data/shapes_hard_color", shuffle=True, batch_size=64) -> DataLoader:
     """
     Loading the shapes dataset using torchvision.
     Returns:
         dataloader: PyTorch DataLoader of shapes images
     """
     image_transformation = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize( 
-            mean=[0.5, 0.5, 0.5],
-            std=[0.5, 0.5, 0.5]
-        )
+        transforms.ToTensor()
     ])
 
     # Create a Dataset

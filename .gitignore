@@ -5,9 +5,12 @@ build/
 dist/
 wheels/
 *.egg-info
+.ipynb_checkpoints/
 
 # Virtual environments
 .venv
 
+# Data
 shapes_hard_color/
-data/
+data/*/*
+

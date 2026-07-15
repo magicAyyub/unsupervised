@@ -1,5 +1,5 @@
 [project]
-name = "unsupervise"
+name = "projet-unsupervised"
 version = "0.1.0"
 description = "unsupervised learning project"
 readme = "README.md"
@@ -11,4 +11,24 @@ dependencies = [
     "torch>=2.8.0",
     "matplotlib>=3.10.0",
     "torchvision>=0.23.0",
+    "gradio>=4.0.0",
+    "jupyter>=1.1.1",
 ]
+
+[project.scripts]
+pca-app = "app:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+include = [
+    "src",
+    "app.py"
+]
+
+[tool.uv]
+package = true
+
+
