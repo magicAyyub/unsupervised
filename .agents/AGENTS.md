@@ -31,7 +31,7 @@ Les classes d'évaluation sont définies dans [src/metrics.py](../src/metrics.py
 
 La dataclass `Codebook` modélise les paramètres fixes partagés nécessaires à la décompression :
 * Attribut : `arrays: list[np.ndarray]` (ex: les centroïdes pour K-Means, les composantes principales pour la PCA, ou les poids du décodeur pour l'AutoEncoder).
-* Propriété : `n_bytes` retourne la taille cumulée en octets de tous les tableaux.
+* Propriété : `n_bytes` retourne la taille de stockage estimée en forçant une précision standard de stockage `float32` (4 octets par paramètre) pour l'ensemble des tableaux afin de garantir la cohérence et l'équité des comparaisons.
 
 ### Latent
 
