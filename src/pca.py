@@ -16,6 +16,7 @@ class PCA(BaseModel):
         self.components: np.ndarray | None = None  # shape (n_features, n_components) once fitted
         self.mean: np.ndarray | None = None         # shape (n_features,) once fitted
         self.explained_variance: np.ndarray | None = None  # eigenvalues retained, useful for reports
+        self.all_eigenvalues_: np.ndarray | None = None    # full spectrum for scree plot analysis
 
     def fit(self, X: np.ndarray) -> "PCA":
         """
@@ -43,6 +44,9 @@ class PCA(BaseModel):
         eigenvalues = eigenvalues[idx]
         eigenvectors = eigenvectors[:, idx]
 
+        # Stocker le spectre complet pour l'analyse de variance (scree plot)
+        self.all_eigenvalues_ = eigenvalues.astype(np.float32)
+
         # Conserver les n_components premiers composants et convertir physiquement
         # en float32 (précision standard en ML pour économiser la mémoire et éviter l'upcasting)
         self.components = eigenvectors[:, :self.n_components].astype(np.float32)
@@ -64,8 +68,8 @@ class PCA(BaseModel):
         if self.components is None or self.mean is None:
             raise ValueError("The model must be fitted before encoding.")
 
-        # La projection produit naturellement un tableau float32 puisque self.mean et self.components le sont
-        X_centered = X - self.mean
+        # Cast explicite pour éviter l'upcasting float64 si X arrive en float64
+        X_centered = (X - self.mean).astype(np.float32)
         latent_coords = np.dot(X_centered, self.components)
 
         return Latent(array=latent_coords, nature="continuous")
@@ -83,8 +87,8 @@ class PCA(BaseModel):
         if self.components is None or self.mean is None:
             raise ValueError("The model must be fitted before decoding.")
 
-        # Pas d'upcasting silencieux en float64 car latent.array, self.components et self.mean sont tous en float32
-        return np.dot(latent.array, self.components.T) + self.mean
+        # Cast explicite pour garantir float32 même si latent.array est en float64
+        return (np.dot(latent.array, self.components.T) + self.mean).astype(np.float32)
 
     def get_codebook(self) -> Codebook:
         """

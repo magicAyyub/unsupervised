@@ -18,16 +18,19 @@ class SOM(BaseModel):
 
     def __init__(self, grid_shape: tuple[int, int], alpha: float = 0.5,
                  gamma: float = 1.0, n_iterations: int = 5000,
+                 decay: str = "linear",
                  random_state: int | None = None):
         self.grid_shape = grid_shape  # ex: (8, 8) -> 64 neurons
         self.alpha = alpha
         self.gamma = gamma
         self.n_iterations = n_iterations
+        self.decay = decay  # "linear" (classique Kohonen) ou "none" (taux fixes)
         self.random_state = random_state
 
         self.n_neurons = grid_shape[0] * grid_shape[1]
         self.W: np.ndarray | None = None       # shape (n_neurons, n_features) once fitted
         self.C: np.ndarray | None = None        # shape (n_neurons, 2), fixed grid coordinates
+        self.history_: list[float] = []          # quantization error sampled during training
 
     def _build_grid_coordinates(self) -> np.ndarray:
         """
@@ -57,6 +60,22 @@ class SOM(BaseModel):
         distances = np.linalg.norm(self.W - x, axis=1)
         return int(np.argmin(distances))
 
+    def _compute_distances(self, X: np.ndarray) -> np.ndarray:
+        """
+        Computes pairwise distances between all samples in X and all neurons.
+
+        Args:
+            X: shape (n_samples, n_features)
+
+        Returns:
+            distances: shape (n_samples, n_neurons)
+        """
+        n_samples = X.shape[0]
+        distances = np.empty((n_samples, self.n_neurons), dtype=np.float32)
+        for i in range(self.n_neurons):
+            distances[:, i] = np.linalg.norm(X - self.W[i], axis=1)
+        return distances
+
     def fit(self, X: np.ndarray) -> "SOM":
         """
         Trains the SOM on the data X.
@@ -70,16 +89,24 @@ class SOM(BaseModel):
         rng = np.random.default_rng(self.random_state)
 
         self.C = self._build_grid_coordinates()
+        self.history_ = []
 
         # Initialisation : Choisir n_neurons exemples distincts au hasard dans X
         indices = rng.choice(X.shape[0], size=self.n_neurons, replace=False)
         self.W = X[indices].copy()
 
+        # Fréquence d'échantillonnage pour le suivi de la loss
+        log_interval = max(1, self.n_iterations // 20)
+
         for iteration in range(self.n_iterations):
-            # Décroissance linéaire des paramètres d'apprentissage (alpha) et de voisinage (gamma)
-            # pour resserrer le voisinage autour du BMU au fil des itérations
-            current_alpha = self.alpha * (1.0 - iteration / self.n_iterations)
-            current_gamma = max(1e-4, self.gamma * (1.0 - iteration / self.n_iterations))
+            # Calcul du taux courant selon le mode de décroissance
+            if self.decay == "linear":
+                progress = iteration / self.n_iterations
+                current_alpha = self.alpha * (1.0 - progress)
+                current_gamma = max(1e-4, self.gamma * (1.0 - progress))
+            else:
+                current_alpha = self.alpha
+                current_gamma = self.gamma
 
             # Choisir un exemple au hasard S_j dans X
             idx = rng.choice(X.shape[0])
@@ -98,7 +125,58 @@ class SOM(BaseModel):
             # W_i = W_i + alpha * neighborhood_i * (S_j - W_i)
             self.W += current_alpha * neighborhood[:, np.newaxis] * (S_j - self.W)
 
+            # Échantillonnage périodique de la quantization error pour les courbes de convergence
+            if iteration % log_interval == 0:
+                sample_idx = rng.choice(X.shape[0], size=min(500, X.shape[0]), replace=False)
+                qe = self.quantization_error(X[sample_idx])
+                self.history_.append(qe)
+
         return self
+
+    def quantization_error(self, X: np.ndarray) -> float:
+        """
+        Mean Euclidean distance between each sample and its BMU.
+
+        Args:
+            X: shape (n_samples, n_features)
+
+        Returns:
+            Mean quantization error (scalar).
+        """
+        if self.W is None:
+            raise ValueError("The model must be fitted before computing quantization error.")
+
+        distances = self._compute_distances(X)
+        return float(np.mean(np.min(distances, axis=1)))
+
+    def topographic_error(self, X: np.ndarray) -> float:
+        """
+        Proportion of samples whose second-closest neuron is NOT a direct
+        neighbor of the first-closest on the grid.
+
+        A lower value indicates better topological preservation.
+
+        Args:
+            X: shape (n_samples, n_features)
+
+        Returns:
+            Topographic error in [0, 1].
+        """
+        if self.W is None or self.C is None:
+            raise ValueError("The model must be fitted before computing topographic error.")
+
+        distances = self._compute_distances(X)
+
+        # Trouver les indices du 1er et du 2e BMU pour chaque échantillon
+        sorted_idx = np.argpartition(distances, kth=2, axis=1)[:, :2]
+        bmu1 = sorted_idx[:, 0]
+        bmu2 = sorted_idx[:, 1]
+
+        # Un neurone est "voisin direct" s'il est adjacent sur la grille (distance de Manhattan = 1)
+        grid_dist = np.sum(np.abs(self.C[bmu1] - self.C[bmu2]), axis=1)
+        n_errors = np.sum(grid_dist > 1.0 + 1e-6)
+
+        return float(n_errors / len(X))
 
     def encode(self, X: np.ndarray) -> Latent:
         """
@@ -113,12 +191,7 @@ class SOM(BaseModel):
         if self.W is None:
             raise ValueError("The model must be fitted before encoding.")
 
-        # Calcul vectorisé de distance pour chaque échantillon de X par rapport à chaque neurone
-        n_samples = X.shape[0]
-        distances = np.empty((n_samples, self.n_neurons), dtype=np.float32)
-        for i in range(self.n_neurons):
-            distances[:, i] = np.linalg.norm(X - self.W[i], axis=1)
-        
+        distances = self._compute_distances(X)
         labels = np.argmin(distances, axis=1)
         return Latent(array=labels, nature="discrete")
 
