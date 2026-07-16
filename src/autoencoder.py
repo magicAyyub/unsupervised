@@ -7,9 +7,11 @@ from src.metrics import Codebook, Latent
 from src.base import BaseModel
 from src.helper import get_device
 
-def make_layer_sizes(input_dim : int
-                     , output_dim : int
-                     , n_layers : int) -> list[int] :
+def make_layer_sizes(
+        input_dim : int
+        , output_dim : int
+        , n_layers : int
+    ) -> list[int] :
     sizes = np.geomspace(input_dim, output_dim, num=n_layers+1)
     return [int(s) for s in sizes]
 
@@ -72,13 +74,15 @@ class AutoEncoder(BaseModel):
                  , encoder_layer_num : int
                  , decoder_layer_num : int
                  , encoder_activation : type[nn.Module]
+                 , fonction_loss : type[nn.Module] = nn.MSELoss
                  , decoder_activation : type[nn.Module] = None
     ):
         super().__init__()
         decoder_activation = encoder_activation if decoder_activation is None else decoder_activation
         self.encoder = Encoder(input_dim, encoder_layer_num, latent_dim, encoder_activation)
         self.decoder = Decoder(latent_dim, decoder_layer_num, output_dim, decoder_activation)
-        # Le transfert de device reste interne au modèle (CPU / CUDA / MPS)
+        self.fonction_loss = fonction_loss
+
         self.device = get_device()
         self.encoder.to(self.device)
         self.decoder.to(self.device)
@@ -90,26 +94,13 @@ class AutoEncoder(BaseModel):
             , batch_size : int = 32
             , learning_rate : float = 1e-3
             ) -> BaseModel:
-        """
-        Trains the autoencoder to reconstruct its own input (self-supervised).
-
-        Args:
-            feature_array: images as a NumPy array, either flattened (N, D) or 4D (N, C, H, W).
-            epochs: number of passes over the dataset.
-            batch_size: mini-batch size.
-            learning_rate: Adam learning rate.
-
-        Returns:
-            self
-        """
         feature_tensor = torch.from_numpy(feature_array).float().to(self.device)
         dataset = TensorDataset(feature_tensor)
         loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
-        # L'AutoEncoder n'est pas un nn.Module : on rassemble les paramètres des deux sous-réseaux
         parameters = list(self.encoder.parameters()) + list(self.decoder.parameters())
         optimizer = torch.optim.Adam(parameters, lr=learning_rate)
-        loss_fn = nn.MSELoss()
+        loss_fn = self.fonction_loss()
 
         self.loss_history = []
         for _ in range(epochs):
@@ -117,7 +108,6 @@ class AutoEncoder(BaseModel):
             for (batch,) in loader:
                 optimizer.zero_grad()
                 reconstruction = self.decoder(self.encoder(batch))
-                # La cible est l'entrée aplatie, ce qui gère aussi bien un tenseur (N, D) que (N, C, H, W)
                 target = batch.view(batch.size(0), -1)
                 loss = loss_fn(reconstruction, target)
                 loss.backward()
