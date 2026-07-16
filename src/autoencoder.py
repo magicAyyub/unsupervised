@@ -1,6 +1,7 @@
 import numpy as np
 import torch.nn as nn
 import torch
+from torch.utils.data import TensorDataset, DataLoader
 
 from src.metrics import Codebook, Latent
 from src.base import BaseModel
@@ -23,7 +24,7 @@ def build_layers(
     return layers
 
 def _forward(self, tensor) -> torch.Tensor:
-    tensor = tensor.view(tensor.size(0), -1) //pas compris
+    tensor = tensor.view(tensor.size(0), -1)
     return self.net(tensor)
 
 
@@ -77,8 +78,14 @@ class AutoEncoder(BaseModel):
         self.encoder = Encoder(input_dim, encoder_layer_num, latent_dim, encoder_activation)
         self.decoder = Decoder(latent_dim, decoder_layer_num, output_dim, decoder_activation)
 
-    def fit(self, X: np.ndarray) -> BaseModel:
-        pass
+    def fit(self
+            , feature_array : np.ndarray
+            , batch_size : int = 32
+            ) -> BaseModel:
+        feature_tensor = torch.from_numpy(feature_array).float()
+        dataset = TensorDataset(feature_tensor)
+        loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+        for (batch,) in loader :
 
     
     def encode(self, input_tensor: np.ndarray) -> Latent:
