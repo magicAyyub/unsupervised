@@ -15,8 +15,7 @@ fit()                    -> boucle sur n_init, garde le meilleur run
 """
 
 class KMeans(BaseModel):
-    # K-Means (Lloyd) from scratch, interface de compression BaseModel.
-    # Quantification vectorielle : chaque point -> indice du centroïde le plus proche.
+    # K-Means (Lloyd), interface de compression BaseModel.
 
     def __init__(
         self,
