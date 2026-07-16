@@ -15,3 +15,6 @@ shapes_hard_color/
 data/*/*
 notebooks/data
 
+# Cached fitted models
+artifacts/
+
