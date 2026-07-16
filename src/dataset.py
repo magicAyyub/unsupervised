@@ -1,3 +1,7 @@
+from pathlib import Path
+from typing import NamedTuple
+
+import numpy as np
 import torch
 import torchvision
 import torchvision.transforms as transforms
@@ -47,4 +51,39 @@ def load_shapes_dataset(data_dir="./data/shapes_hard_color", shuffle=True, batch
     )
 
     return shapes_dataloader
-    
+
+
+class ShapesArrays(NamedTuple):
+    """In-memory view of one split of the colored-shapes dataset."""
+    images: np.ndarray        # (N, 32, 32, 3) uint8 RGB images
+    labels: np.ndarray        # (N,) int64 shape index in [0, 5]
+    factors: np.ndarray       # (N, 7) float32 ground-truth generative factors
+    factor_names: np.ndarray  # (7,) names of the factor columns
+    class_names: np.ndarray   # (6,) shape names indexed by label
+
+
+def load_shapes_arrays(
+    data_dir: str = "./data/shapes_hard_color", split: str = "train"
+) -> ShapesArrays:
+    """
+    Load one split of the colored-shapes dataset from its packaged .npz archive.
+
+    Args:
+        data_dir: directory holding ``shapes_train.npz`` and ``shapes_validation.npz``.
+        split: either ``"train"`` or ``"validation"``.
+
+    Returns:
+        A ShapesArrays tuple of NumPy arrays.
+    """
+    if split not in ("train", "validation"):
+        raise ValueError("split must be 'train' or 'validation'.")
+
+    path = Path(data_dir) / f"shapes_{split}.npz"
+    with np.load(path, allow_pickle=True) as archive:
+        return ShapesArrays(
+            images=archive["images"],
+            labels=archive["labels"],
+            factors=archive["factors"],
+            factor_names=archive["factor_names"],
+            class_names=archive["class_names"],
+        )
