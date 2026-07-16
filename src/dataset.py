@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from typing import NamedTuple
 
@@ -6,6 +7,7 @@ import torch
 import torchvision
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
+
 
 def load_mnist_dataset(data_dir="data", train=True, download=True, shuffle=True, batch_size=64) -> DataLoader:
     """
@@ -87,3 +89,46 @@ def load_shapes_arrays(
             factor_names=archive["factor_names"],
             class_names=archive["class_names"],
         )
+
+
+def load_shapes_npz(split="train", data_dir=None, max_samples=None, seed=0):
+    """
+    Loads the pre-rendered shapes dataset from its .npz archive.
+
+    The archive already stores uniform 32x32 RGB images, which is cleaner and faster than
+    decoding the JPEG variant, and it also ships the shape-class names.
+
+    Args:
+        split: "train" or "validation".
+        data_dir: folder holding shapes_{split}.npz. If None, it is searched both from the
+            project root and from the notebooks/ folder so the call works regardless of the CWD.
+        max_samples: if set, draw a reproducible random subset of that many images.
+        seed: seed controlling the subset selection.
+
+    Returns:
+        images: float32 array (N, C, H, W) scaled to [0, 1].
+        labels: int64 array (N,) with the shape-class index.
+        class_names: list[str] mapping a label index to its shape name.
+    """
+    if data_dir is None:
+        # Le dataset vit sous data/ a la racine ; on couvre les deux CWD possibles
+        for base in ("data", "../data"):
+            candidate = os.path.join(base, "shapes_hard_color", "shapes_hard_color")
+            if os.path.isdir(candidate):
+                data_dir = candidate
+                break
+        if data_dir is None:
+            raise FileNotFoundError("shapes_hard_color introuvable sous data/ ou ../data/")
+
+    archive = np.load(os.path.join(data_dir, f"shapes_{split}.npz"), allow_pickle=True)
+    images = archive["images"]  # (N, H, W, C) uint8
+    labels = archive["labels"]
+
+    if max_samples is not None and max_samples < len(images):
+        selection = np.random.default_rng(seed).choice(len(images), size=max_samples, replace=False)
+        images, labels = images[selection], labels[selection]
+
+    # Normalisation [0,1] et passage a la convention (N, C, H, W) du projet
+    images = (images.astype(np.float32) / 255.0).transpose(0, 3, 1, 2)
+    class_names = [str(name) for name in archive["class_names"]]
+    return images, labels.astype(np.int64), class_names

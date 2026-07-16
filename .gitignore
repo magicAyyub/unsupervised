@@ -10,8 +10,7 @@ wheels/
 # Virtual environments
 .venv
 
-# Data
+data/
+notebooks/data/
 shapes_hard_color/
-data/*/*
-notebooks/data
 
