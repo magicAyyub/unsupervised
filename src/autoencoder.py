@@ -5,6 +5,7 @@ from torch.utils.data import TensorDataset, DataLoader
 
 from src.metrics import Codebook, Latent
 from src.base import BaseModel
+from src.helper import get_device
 
 def make_layer_sizes(input_dim : int
                      , output_dim : int
@@ -77,33 +78,71 @@ class AutoEncoder(BaseModel):
         decoder_activation = encoder_activation if decoder_activation is None else decoder_activation
         self.encoder = Encoder(input_dim, encoder_layer_num, latent_dim, encoder_activation)
         self.decoder = Decoder(latent_dim, decoder_layer_num, output_dim, decoder_activation)
+        # Le transfert de device reste interne au modèle (CPU / CUDA / MPS)
+        self.device = get_device()
+        self.encoder.to(self.device)
+        self.decoder.to(self.device)
+        self.loss_history: list[float] = []
 
     def fit(self
             , feature_array : np.ndarray
+            , epochs : int = 20
             , batch_size : int = 32
+            , learning_rate : float = 1e-3
             ) -> BaseModel:
-        feature_tensor = torch.from_numpy(feature_array).float()
+        """
+        Trains the autoencoder to reconstruct its own input (self-supervised).
+
+        Args:
+            feature_array: images as a NumPy array, either flattened (N, D) or 4D (N, C, H, W).
+            epochs: number of passes over the dataset.
+            batch_size: mini-batch size.
+            learning_rate: Adam learning rate.
+
+        Returns:
+            self
+        """
+        feature_tensor = torch.from_numpy(feature_array).float().to(self.device)
         dataset = TensorDataset(feature_tensor)
         loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
-        for (batch,) in loader :
 
-    
-    def encode(self, input_tensor: np.ndarray) -> Latent:
+        # L'AutoEncoder n'est pas un nn.Module : on rassemble les paramètres des deux sous-réseaux
+        parameters = list(self.encoder.parameters()) + list(self.decoder.parameters())
+        optimizer = torch.optim.Adam(parameters, lr=learning_rate)
+        loss_fn = nn.MSELoss()
+
+        self.loss_history = []
+        for _ in range(epochs):
+            running_loss = 0.0
+            for (batch,) in loader:
+                optimizer.zero_grad()
+                reconstruction = self.decoder(self.encoder(batch))
+                # La cible est l'entrée aplatie, ce qui gère aussi bien un tenseur (N, D) que (N, C, H, W)
+                target = batch.view(batch.size(0), -1)
+                loss = loss_fn(reconstruction, target)
+                loss.backward()
+                optimizer.step()
+                running_loss += loss.item() * batch.size(0)
+            self.loss_history.append(running_loss / len(dataset))
+        return self
+
+    def encode(self, feature_array: np.ndarray) -> Latent:
         with torch.no_grad() :
-            input_tensor = torch.from_numpy(input_tensor).float()
+            feature_tensor = torch.from_numpy(feature_array).float().to(self.device)
             return Latent(
-                array=self.encoder(input_tensor).cpu().numpy()
+                array=self.encoder(feature_tensor).cpu().numpy()
                 , nature="continuous"
             )
-        
+
 
     def decode(self, latent_object: Latent) -> np.ndarray:
         with torch.no_grad() :
-            latent_tensor = torch.from_numpy(latent_object.array).float()
+            latent_tensor = torch.from_numpy(latent_object.array).float().to(self.device)
             return self.decoder(latent_tensor).cpu().numpy()
-    
 
-    
+
     def get_codebook(self) -> Codebook:
-        
-        pass
+        # Le codebook partagé est constitué des poids du décodeur : ce sont exactement
+        # les paramètres dont le récepteur a besoin pour reconstruire une image à partir d'un code latent.
+        arrays = [parameter.detach().cpu().numpy() for parameter in self.decoder.parameters()]
+        return Codebook(arrays=arrays)

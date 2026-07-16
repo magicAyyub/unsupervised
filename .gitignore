@@ -12,6 +12,6 @@ wheels/
 
 # Data
 shapes_hard_color/
-data/*/*
+data/
 notebooks/data/
 
