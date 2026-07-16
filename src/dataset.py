@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from typing import NamedTuple
 
@@ -6,6 +7,7 @@ import torch
 import torchvision
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
+
 
 def load_mnist_dataset(data_dir="data", train=True, download=True, shuffle=True, batch_size=64) -> DataLoader:
     """
