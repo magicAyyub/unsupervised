@@ -8,15 +8,7 @@ from src.metrics import Codebook, Latent
 
 class KMeans(BaseModel):
     """
-    From-scratch K-Means clustering (Lloyd's algorithm), implementing the
-    project's BaseModel compression interface.
-
-    In the compression setting, K-Means performs vector quantization: every
-    sample is encoded by the index of its nearest centroid (a discrete latent
-    code) and decoded back to the centroid vector itself. The K centroids form
-    the shared codebook required for reconstruction.
-
-    Attributes set after fit:
+    after fit:
         centroids_: cluster centers of shape (n_clusters, n_features).
         labels_: cluster assignment of each training sample.
         inertia_: sum of squared distances of samples to their centroid.
