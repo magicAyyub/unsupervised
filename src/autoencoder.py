@@ -7,6 +7,9 @@ from src.metrics import Codebook, Latent
 from src.base import BaseModel
 from src.helper import get_device
 
+# Seules activations bornees dans [0,1], donc les seules compatibles avec BCELoss.
+ACTIVATIONS_BORNEES_UNITE = (nn.Sigmoid, nn.Hardsigmoid)
+
 def make_layer_sizes(
         input_dim : int
         , output_dim : int
@@ -79,26 +82,25 @@ class AutoEncoder(BaseModel):
                  , latent_dim : int
                  , encoder_layer_num : int
                  , decoder_layer_num : int
-                 , encoder_activation : type[nn.Module]
-                 , fonction_loss : type[nn.Module] = nn.MSELoss
-                 , decoder_activation : type[nn.Module] = None      # None = reprend encoder_activation
-                 , latent_activation : type[nn.Module] = None       # None = latent lineaire
-                 , output_activation : type[nn.Module] = nn.Sigmoid # None = sortie lineaire
+                 , encoder_activation_function : type[nn.Module]
+                 , latent_activation_function : type[nn.Module]
+                 , loss_function : type[nn.Module] = nn.MSELoss
+                 , decoder_activation : type[nn.Module] = None
+                 , output_activation_function : type[nn.Module] = nn.Sigmoid
     ):
         super().__init__()
-        # BCELoss exige des entrees dans [0,1] : sans activation terminale, elle leve une
-        # RuntimeError au premier batch. Aucune configuration ne rend ce couple valide.
-        if output_activation is None and issubclass(fonction_loss, nn.BCELoss) :
+        if issubclass(loss_function, nn.BCELoss) and output_activation_function not in ACTIVATIONS_BORNEES_UNITE :
+            nom = output_activation_function.__name__ if output_activation_function else "aucune (sortie lineaire)"
             raise ValueError(
-                "BCELoss exige des sorties dans [0,1] : garder output_activation=nn.Sigmoid, "
-                "ou utiliser nn.BCEWithLogitsLoss avec output_activation=None."
+                f"BCELoss exige des sorties dans [0,1], or output_activation={nom} ne les borne pas. "
+                "Utiliser output_activation=nn.Sigmoid, ou nn.BCEWithLogitsLoss avec output_activation=None."
             )
-        decoder_activation = encoder_activation if decoder_activation is None else decoder_activation
-        self.encoder = Encoder(input_dim, encoder_layer_num, latent_dim, encoder_activation, latent_activation)
-        self.decoder = Decoder(latent_dim, decoder_layer_num, output_dim, decoder_activation, output_activation)
-        self.fonction_loss = fonction_loss
-        self.latent_activation = latent_activation
-        self.output_activation = output_activation
+        decoder_activation = encoder_activation_function if decoder_activation is None else decoder_activation
+        self.encoder = Encoder(input_dim, encoder_layer_num, latent_dim, encoder_activation_function, latent_activation_function)
+        self.decoder = Decoder(latent_dim, decoder_layer_num, output_dim, decoder_activation, output_activation_function)
+        self.fonction_loss = loss_function
+        self.latent_activation = latent_activation_function
+        self.output_activation = output_activation_function
 
         self.device = get_device()
         self.encoder.to(self.device)
