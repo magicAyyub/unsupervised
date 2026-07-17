@@ -308,3 +308,53 @@ egalite avec les vraies images (0.054). Elle mesure en fait le bruit poivre-et-s
 geometrie. Metrique jetee : mieux vaut pas de chiffre qu'un chiffre qui mesure autre chose que ce
 qu'il annonce.
 
+# 2026-07-17 14:30, un notebook vanilla assume sur shapes, et l'inversion qui tranche
+
+`06_gan_shapes.ipynb` couvre le chemin complet MLP -> conv -> WGAN-GP. Le WGAN-GP y est justifie
+par une pathologie mesuree, mais il empile beaucoup de concepts (critique, penalite de gradient,
+LayerNorm vs BatchNorm, n_critic) pour un notebook qui doit rester explicable de bout en bout.
+Ecriture d'un pendant strictement vanilla, `06_gan_shapes_vanilla.ipynb` : la classe `GAN` de
+`src/gan.py` telle quelle, `data_dim` 784 -> 3072, rien d'autre. Aucune modification de `src/`,
+aucune modification du notebook existant. Les deux se completent, ils ne se remplacent pas.
+
+Reproduction exacte des chiffres du 09:30 (meme lot, effectifs `[1610, 1691, 1686, 1656, 1726,
+1631]`, identiques a `01_kmeans_shapes.ipynb`) : accuracy de `D` 0.549, variance de `G` 0.123,
+loss D 1.368 / loss G 0.743, ecart-type inter-images 0.1595 contre 0.1765 au reel. Images : taches.
+
+**Le fait nouveau est sur la tache 2, et il est plus tranchant que tout le reste.** Le 09:30 ne
+mesurait que la generation. Ici l'inversion a ete mesuree sur le `G` MLP, et **elle echoue de la
+meme facon** : les reconstructions retrouvent la couleur dominante, la taille et la position
+approximative, jamais la forme. Un losange bleu devient une tache bleue.
+
+| | GAN (MLP, invert) | AutoEncoder (150 ep) |
+|---|---|---|
+| MSE | 0.01866 | 0.00477 |
+| codebook | 15 326 208 o | 13 411 860 o |
+| ratio (N = 10000) | 6.36 | 7.06 |
+
+Pourquoi c'est la mesure qui compte : l'inversion est une descente de gradient de 300 pas **dediee a
+une seule image**. Si un `z` produisant cette croix existait, elle aurait toutes les chances de le
+trouver. Elle ne le trouve pas. La tache 1 pouvait laisser croire a un probleme d'echantillonnage du
+prior ; la tache 2 elimine cette hypothese. Le `G` MLP **ne sait pas produire une geometrie**, quel
+que soit `z`. Mode dropping total sur la forme, la ou MNIST n'en montrait qu'un partiel.
+
+Ce point est le contraste net avec le WGAN-GP convolutif du 13:00 : la-bas `generate` echouait mais
+`invert` retrouvait les formes (MSE 0.00706), d'ou l'asymetrie "meilleur decodeur que generateur".
+Cette asymetrie est un **fait du convolutif, pas du GAN en general**. Avec un `G` MLP les deux
+taches echouent ensemble, ce qui isole proprement la cause : le prior spatial. Le detour par la
+distinction generation / inversion n'a de sens qu'une fois les convolutions en place.
+
+Le GAN vanilla est aussi **domine sur les deux axes** de la compression : plus mauvais en MSE (3.9x)
+et codebook plus lourd (15.3 Mo contre 13.4), donc ratio inferieur. Aucun regime de N ne le sauve,
+contrairement a MNIST. Seuil de rentabilite 1289 images, plafond 30.72.
+
+Projection : kNN 0.249 sur les features de `D` contre 0.245 sur les pixels bruts, hasard a 0.167.
+L'ecart est dans le bruit. A noter, sur MNIST les features faisaient legerement **moins** bien
+(0.430 contre 0.441), ici legerement mieux : dans les deux cas le detour n'apporte rien, et il ne
+faut pas surinterpreter le signe de l'ecart.
+
+Verdict du notebook vanilla : **echec sur les trois taches**, une seule cause, mesuree deux fois.
+Resultat negatif, il reste. Il a l'avantage d'etre plus simple a defendre que le chemin WGAN-GP :
+une seule pathologie, un seul diagnostic (`D` aveugle faute de voisinage), et la correction (prior
+spatial) renvoyee a `06_gan_shapes.ipynb`.
+
