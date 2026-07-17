@@ -21,8 +21,8 @@ Apply these guidelines strictly to ensure code quality, readability, and a natur
 
 ## Language Rules
 * Code syntax, variables, function names, and structural elements must be written in English.
-* Docstrings and in-code API documentation must be in English since they are part of the functional code contract.
-* Inline comments may be written in French.
+* No traditional docstrings. Comments must be low-verbose, in French, structured as lists (algorithmic style), prioritizing clarity over verbosity.
+* For every function used, show its signature and what it returns, in particular the shapes of any returned arrays/tensors (especially in notebooks).
 
 ## Presentation and Formatting Style
 * Avoid synthetic indicators like emojis in files or commits.

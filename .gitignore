@@ -10,8 +10,10 @@ wheels/
 # Virtual environments
 .venv
 
-# Data
-shapes_hard_color/
 data/
 notebooks/data/
+shapes_hard_color/
+
+# Cached fitted models
+artifacts/
 

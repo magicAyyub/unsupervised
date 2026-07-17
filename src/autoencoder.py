@@ -83,7 +83,7 @@ class AutoEncoder(BaseModel):
                  , encoder_layer_num : int
                  , decoder_layer_num : int
                  , encoder_activation_function : type[nn.Module]
-                 , latent_activation_function : type[nn.Module]
+                 , latent_activation_function : type[nn.Module] = None  # None = latent lineaire
                  , loss_function : type[nn.Module] = nn.MSELoss
                  , decoder_activation : type[nn.Module] = None
                  , output_activation_function : type[nn.Module] = nn.Sigmoid

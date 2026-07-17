@@ -12,8 +12,10 @@ class Codebook:
     def n_bytes(self) -> int:
         """
         Total size in bytes of all arrays composing the codebook.
+        We assume float32 precision (4 bytes per value) for all parameters,
+        consistent with standard model storage formats.
         """
-        return sum(arr.nbytes for arr in self.arrays)
+        return sum(arr.size * 4 for arr in self.arrays)
 
 
 @dataclass
