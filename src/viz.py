@@ -1,14 +1,4 @@
-"""
-Helpers de visualisation et d'echantillonnage communs aux notebooks.
-
-Tout ce qui est ici est INDEPENDANT du modele: ces fonctions ne connaissent ni
-AutoEncoder ni VariationalAutoEncoder. Ce qui est specifique a un modele
-(describe_*, run_*_experiment) reste dans le notebook concerne.
-
-Convention des figures, partagee par tous les notebooks:
-    le TITRE dit ce que la figure explore (ce qui VARIE),
-    la note grise en bas dit ce qui est reste FIXE (voir format_fixed_note).
-"""
+"""Helpers de visualisation et d'echantillonnage communs aux notebooks."""
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -17,15 +7,7 @@ from src.metrics import Latent
 
 
 def format_fixed_note(fields: dict, omit=(), extra=None) -> str:
-    """
-    Met en forme la note du bas d'une figure a partir des hyper-parametres fixes.
-
-    Args:
-        fields: dict ordonne {nom: valeur} des parametres a afficher.
-        omit: noms a retirer, typiquement ceux que la figure explore et qui sont
-            deja portes par le titre, la legende ou les etiquettes de lignes.
-        extra: fragment libre ajoute a la fin (par ex. une regle plutot qu'une valeur).
-    """
+    """Met en forme la note du bas d'une figure a partir des hyper-parametres fixes."""
     parts = [f"{key}={value}" for key, value in fields.items() if key not in omit]
     if extra:
         parts.append(extra)
@@ -40,7 +22,7 @@ def flattened_vector_to_image(flat_vector, image_shape):
 
 def finish_figure(fig, title=None, config=None, layout=True):
     """
-    Titre en haut (ce que la figure explore), configuration en petit en bas (ce qui est fixe).
+    Titre en haut, configuration en petit en bas
     layout=False pour les figures deja construites en layout='constrained'.
     """
     if title:
@@ -76,10 +58,7 @@ def show_image_grid(flat_images, image_shape, nrow=4, ncol=8, title=None, config
 
 
 def show_labeled_image_rows(rows, image_shape, row_labels, n=8, title=None, config=None):
-    """
-    Une ligne d'images par configuration, etiquetee a gauche: permet de comparer
-    plusieurs modeles sur les memes images.
-    """
+    """Une ligne d'images par configuration"""
     cmap = "gray" if image_shape[0] == 1 else None
     fig, axes = plt.subplots(len(rows), n, figsize=(n * 1.3, len(rows) * 1.45))
     axes = np.atleast_2d(axes)
