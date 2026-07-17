@@ -26,14 +26,13 @@ class VariationalEncoder(nn.Module):
 
     def forward(self, x):
         hidden = self.trunk(x)
-        # clamp: exp() deborde en float32 au-dela de ~88, et rien ne borne logvar si beta=0.
         return self.mu_head(hidden), torch.clamp(self.logvar_head(hidden), -20, 10)
 
 
 class VariationalAutoEncoder(BaseModel):
 
     def __init__(self, input_dim, output_dim, latent_dim, encoder_layer_num, decoder_layer_num,
-                 encoder_activation_function, loss_function=nn.BCELoss, beta=1.0,
+                 encoder_activation_function, loss_function=nn.BCELoss,
                  output_activation_function=nn.Sigmoid):
         if loss_function is nn.BCELoss and output_activation_function is not nn.Sigmoid:
             raise ValueError("BCELoss exige des sorties dans [0,1]: garder output_activation=nn.Sigmoid")
@@ -45,7 +44,6 @@ class VariationalAutoEncoder(BaseModel):
                                encoder_activation_function, output_activation_function).to(self.device)
 
         self.latent_dim = latent_dim
-        self.beta = beta
         self.fonction_loss = loss_function
         self.output_activation = output_activation_function
         self.loss_history = []
@@ -66,10 +64,7 @@ class VariationalAutoEncoder(BaseModel):
         parameters = list(self.encoder.parameters()) + list(self.decoder.parameters())
         optimizer = torch.optim.Adam(parameters, lr=learning_rate)
 
-        # reduction="sum" est indispensable: le KL somme sur les dimensions latentes, donc la
-        # reconstruction doit sommer sur les 784 pixels. Avec le defaut "mean" elle serait 784x
-        # trop petite, ce qui revient exactement a beta=784: le KL ecrase tout et le posterior
-        # s'effondre (mu -> 0, sigma -> 1, KL -> 0).
+
         recon_loss_fn = self.fonction_loss(reduction="sum")
 
         self.loss_history, self.recon_history, self.kl_history = [], [], []
@@ -82,7 +77,7 @@ class VariationalAutoEncoder(BaseModel):
 
                 recon = recon_loss_fn(reconstruction, batch) / batch.size(0)
                 kl = self.kl_per_dim(mu, logvar).sum()
-                loss = recon + self.beta * kl
+                loss = recon + kl
 
                 loss.backward()
                 optimizer.step()
