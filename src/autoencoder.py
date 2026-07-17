@@ -97,7 +97,6 @@ class AutoEncoder(BaseModel):
         self.encoder = Encoder(input_dim, encoder_layer_num, latent_dim, encoder_activation, latent_activation)
         self.decoder = Decoder(latent_dim, decoder_layer_num, output_dim, decoder_activation, output_activation)
         self.fonction_loss = fonction_loss
-        # Memorises pour l'etiquetage des figures: `None` n'est pas lisible par introspection.
         self.latent_activation = latent_activation
         self.output_activation = output_activation
 
