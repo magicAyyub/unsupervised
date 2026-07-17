@@ -18,12 +18,17 @@ def make_layer_sizes(
 def build_layers(
         sizes : list[int]
         , activation : type[nn.Module]
-) -> nn.Sequential :
+        , output_activation : type[nn.Module] = None
+) -> list[nn.Module] :
+    # `activation` remplit les couches cachees ; `output_activation` borne le tenseur
+    # de sortie (None = aucune activation terminale, la sortie reste lineaire).
     layers = []
     for i in range(len(sizes)-1) :
         layers.append(nn.Linear(sizes[i], sizes[i+1]))
         if i < len(sizes) - 2 :
             layers.append(activation())
+    if output_activation is not None :
+        layers.append(output_activation())
     return layers
 
 def _forward(self, tensor) -> torch.Tensor:
@@ -37,10 +42,11 @@ class Encoder(nn.Module):
                  , encoder_layer_num : int
                  , latent_dim : int
                  , activation : type[nn.Module]
+                 , latent_activation : type[nn.Module] = None
     ) :
         super().__init__()
         sizes = make_layer_sizes(input_dim, latent_dim, encoder_layer_num)
-        layers = build_layers(sizes, activation)
+        layers = build_layers(sizes, activation, latent_activation)
         self.net = nn.Sequential(*layers)
         
 
@@ -55,11 +61,11 @@ class Decoder(nn.Module):
                  , decoder_layer_num : int
                  , output_dim : int
                  , activation : type[nn.Module]
+                 , output_activation : type[nn.Module] = nn.Sigmoid
     ) :
         super().__init__()
         sizes = make_layer_sizes(latent_dim, output_dim, decoder_layer_num)
-        layers = build_layers(sizes, activation)
-        layers.append(nn.Sigmoid())
+        layers = build_layers(sizes, activation, output_activation)
         self.net = nn.Sequential(*layers)
         
     
@@ -75,13 +81,25 @@ class AutoEncoder(BaseModel):
                  , decoder_layer_num : int
                  , encoder_activation : type[nn.Module]
                  , fonction_loss : type[nn.Module] = nn.MSELoss
-                 , decoder_activation : type[nn.Module] = None
+                 , decoder_activation : type[nn.Module] = None      # None = reprend encoder_activation
+                 , latent_activation : type[nn.Module] = None       # None = latent lineaire
+                 , output_activation : type[nn.Module] = nn.Sigmoid # None = sortie lineaire
     ):
         super().__init__()
+        # BCELoss exige des entrees dans [0,1] : sans activation terminale, elle leve une
+        # RuntimeError au premier batch. Aucune configuration ne rend ce couple valide.
+        if output_activation is None and issubclass(fonction_loss, nn.BCELoss) :
+            raise ValueError(
+                "BCELoss exige des sorties dans [0,1] : garder output_activation=nn.Sigmoid, "
+                "ou utiliser nn.BCEWithLogitsLoss avec output_activation=None."
+            )
         decoder_activation = encoder_activation if decoder_activation is None else decoder_activation
-        self.encoder = Encoder(input_dim, encoder_layer_num, latent_dim, encoder_activation)
-        self.decoder = Decoder(latent_dim, decoder_layer_num, output_dim, decoder_activation)
+        self.encoder = Encoder(input_dim, encoder_layer_num, latent_dim, encoder_activation, latent_activation)
+        self.decoder = Decoder(latent_dim, decoder_layer_num, output_dim, decoder_activation, output_activation)
         self.fonction_loss = fonction_loss
+        # Memorises pour l'etiquetage des figures: `None` n'est pas lisible par introspection.
+        self.latent_activation = latent_activation
+        self.output_activation = output_activation
 
         self.device = get_device()
         self.encoder.to(self.device)
