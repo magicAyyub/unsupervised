@@ -48,7 +48,7 @@ La dataclass `Latent` modélise les représentations compressées des données :
 ## Directives de Code et Normes Linguistiques
 
 * **Langue du code** : Tout le code (noms de variables, fonctions, classes, scripts) doit être rédigé en anglais.
-* **Docstrings** : La documentation de l'API (docstrings de classes et de fonctions) doit être écrite en anglais pour conserver une cohérence professionnelle.
-* **Commentaires** : Les commentaires explicatifs internes (inline comments) peuvent être rédigés en français.
+* **Commentaires et documentation des fonctions** : Pas de docstrings traditionnels. Uniquement des commentaires low-verbose, en français, structurés sous forme de liste (style algorithmique), qui priorisent la clarté à la verbosité.
+* **Signatures et valeurs de retour** : Pour toute fonction utilisée, expliciter sa signature ainsi que ce qu'elle retourne, en particulier les shapes des tableaux/tenseurs retournés (notamment dans les notebooks).
 * **Format des images** : Les jeux de données doivent être chargés sous forme de tenseurs d'images 4D standards `(batch_size, channels, height, width)`. Tout aplatissement pour les modèles linéaires (K-Means, PCA, Linear AutoEncoder) doit s'effectuer à la volée avec la méthode `.flatten(start_dim=1)` afin de préserver la compatibilité avec de futures architectures convolutionnelles.
 * **Évaluation** : Aucune formule de calcul de poids ou de métriques de compression ne doit être dupliquée dans les classes des modèles. Tout calcul de performance de compression doit faire appel à la fonction centralisée `compression_report` dans [src/metrics.py](../src/metrics.py).
