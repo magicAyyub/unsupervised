@@ -1,0 +1,384 @@
+---
+title: "Projet d'Apprentissage Non Supervisé"
+subtitle: "Rapport d'Expérimentation"
+author:
+  - name: "PASINI Giorgio"
+  - name: "NIYUNGEKO Brandon Tchaka"
+  - name: "DOUMBIA Ayouba"
+date: today
+lang: fr
+format:
+  pdf:
+    toc: true
+    toc-title: "Table des matières"
+    number-sections: true
+    colorlinks: true
+    geometry:
+      - top=30mm
+      - bottom=30mm
+      - left=25mm
+      - right=25mm
+---
+
+{{< pagebreak >}}
+
+## Introduction
+
+Ce projet d'apprentissage non supervisé a pour but d'évaluer, de comparer et de comprendre le comportement de différents algorithmes de compression, de quantification et de génération sur deux types de données d'images :
+1. **MNIST** : Un jeu de données classique composé d'images de chiffres manuscrits en niveaux de gris de dimension $28 \times 28$ ($784$ caractéristiques).
+2. **Shapes** : Un jeu de données plus complexe comprenant des formes géométriques colorées (cercles, carrés, triangles, croix, étoiles, barres) de dimension $3 \times 32 \times 32$ ($3072$ caractéristiques), avec des variations de forme, de couleur et de position.
+
+L'analyse de ces algorithmes est structurée autour de trois grands axes :
+* **La compression et la reconstruction** : Évaluer la capacité du modèle à projeter les données dans un espace latent réduit et à les reconstruire avec une distorsion minimale (mesurée par la Mean Squared Error - MSE).
+* **Le codebook et l'efficacité de stockage** : Mesurer le coût de stockage partagé (paramètres fixes du modèle) et le coût de stockage individuel (représentation compressée par image), afin de calculer le ratio de compression théorique.
+* **La structure de l'espace latent et la génération** : Analyser si l'espace latent appris est continu, régulier et interpolable, permettant ainsi la génération de nouveaux échantillons réalistes.
+
+---
+
+## Algorithme de Quantification : K-Means
+
+L'algorithme des K-Means effectue une quantification vectorielle en partitionnant les données en $K$ clusters. L'espace latent y est discret (indice du centroïde le plus proche). Le codebook contient les coordonnées des $K$ centroïdes dans l'espace des données.
+
+### Expérimentation sur MNIST
+
+Sur MNIST, nous avons étudié l'impact du nombre de clusters $K$ sur l'inertie et la MSE de reconstruction.
+
+![Exemples MNIST](report_assets/01_kmeans_cell4_out0.png){width=85%}
+
+* **Sensibilité à l'initialisation** : Nous constatons que l'écart d'inertie entre la pire et la meilleure initialisation aléatoire est de $0.70\%$, le gain obtenu après 10 lancements successifs étant de $0.53\%$. L'utilisation de l'initialisation `k-means++` stabilise grandement la convergence par rapport à une initialisation uniforme.
+* **Analyse de la reconstruction** : Le centroïde représente la "moyenne" des images du cluster. Pour $K=10$, les centroïdes sont des chiffres moyennés flous. En augmentant $K$, les centroïdes se spécialisent et la reconstruction devient plus nette.
+
+![Courbes K-Means MNIST](report_assets/01_kmeans_cell25_out0.png){width=85%}
+
+* **Performance de classification induite** : En attribuant à chaque cluster le chiffre majoritaire présent en son sein, nous évaluons la pureté des clusters :
+  * Pour $K = 10$ : Précision de $56.78\%$, MSE de $0.0495$.
+  * Pour $K = 64$ : Précision de $82.60\%$, MSE de $0.0370$.
+  * Pour $K = 512$ : Précision de $91.25\%$, MSE de $0.0263$.
+
+![Reconstruction K-Means MNIST](report_assets/01_kmeans_cell30_out0.png){width=95%}
+
+![Centroïdes K-Means MNIST](report_assets/01_kmeans_cell14_out0.png){width=95%}
+
+![Contingence K-Means MNIST](report_assets/01_kmeans_cell34_out0.png){width=70%}
+
+### Expérimentation sur Shapes
+
+Sur le jeu de données Shapes, K-Means montre des limites fondamentales liées à la nature des images colorées.
+
+![Exemples Shapes](report_assets/01_kmeans_shapes_cell4_out0.png){width=95%}
+
+![Centroïdes Shapes K=6](report_assets/01_kmeans_shapes_cell14_out0.png){width=95%}
+
+* **Limites de la métrique Euclidienne sur pixels bruts** : Pour $K = 6$ (nombre réel de formes), les centroïdes appris ne représentent pas des formes géométriques nettes, mais des aplats de couleurs moyennes à des positions spécifiques.
+* **Échec de l'association aux classes géométriques** :
+  * Pour $K = 6$, la précision de classification par vote majoritaire n'est que de $26.29\%$ (très proche du hasard à $16.67\%$).
+  * Même pour $K = 512$, la précision ne dépasse pas $43.50\%$.
+* **Explication** : L'inertie euclidienne est dominée par les variations de couleur du fond et de la forme, ainsi que par la position (translation) de la forme. K-Means regroupe donc les images par couleur dominante ou par zone d'activation spatiale des pixels, et non par structure géométrique (cercle vs triangle).
+
+![Reconstruction K-Means Shapes](report_assets/01_kmeans_shapes_cell30_out0.png){width=95%}
+
+![Contingence K-Means Shapes](report_assets/01_kmeans_shapes_cell34_out0.png){width=70%}
+
+---
+
+## Réduction Linéaire de Dimension : PCA (Analyse en Composantes Principales)
+
+La PCA projette linéairement les données dans un sous-espace continu défini par les vecteurs propres de la matrice de covariance. Le codebook contient la moyenne des données et les $N$ premiers vecteurs propres.
+
+### Analyse de la Variance Expliquée Cumulée
+
+Avant de choisir la dimension latente $N$, nous analysons le spectre des valeurs propres pour déterminer la part de variance conservée.
+
+![Variance Expliquée PCA MNIST](report_assets/pca_mnist_variance.png){width=80%}
+
+![Variance Expliquée PCA Shapes](report_assets/pca_shapes_variance.png){width=80%}
+
+* **MNIST** : 
+  * $90\%$ de la variance est capturée avec $N = 85$ composantes.
+  * $95\%$ de la variance avec $N = 150$ composantes.
+  * $99\%$ de la variance avec $N = 326$ composantes.
+* **Shapes** :
+  * $90\%$ de la variance est capturée avec $N = 427$ composantes.
+  * $95\%$ de la variance avec $N = 711$ composantes.
+  * $99\%$ de la variance avec $N = 1104$ composantes.
+
+Le dataset Shapes requiert beaucoup plus de composantes linéaires pour atteindre un niveau de variance équivalent à MNIST, ce qui s'explique par les degrés de liberté supplémentaires (3 canaux couleur, translations, rotations).
+
+### Qualité de Reconstruction et Espace Latent
+
+En fixant $N$ pour conserver environ $90\%$ de la variance ($N=87$ pour MNIST et $N=513$ pour Shapes), nous obtenons les reconstructions suivantes :
+
+![Reconstruction PCA MNIST](report_assets/pca_mnist_reconstruction.png){width=95%}
+
+![Reconstruction PCA Shapes](report_assets/pca_shapes_reconstruction.png){width=95%}
+
+* **MNIST (N=87)** : Reconstruction très nette avec une MSE de $0.0065$. Le ratio de compression est de $8.35$.
+* **Shapes (N=513)** : Reconstruction propre des formes et couleurs avec une MSE de $0.0029$. Le ratio de compression est de $4.58$.
+
+L'espace latent 2D ($N=2$) montre une projection continue où les classes se chevauchent en partie, reflétant le fait que la PCA effectue uniquement des rotations et projections orthogonales globales sans intégrer de relations non linéaires complexes.
+
+![Espace Latent PCA 2D MNIST](report_assets/pca_mnist_latent.png){width=80%}
+
+![Espace Latent PCA 2D Shapes](report_assets/pca_shapes_latent.png){width=80%}
+
+---
+
+## Compression Non Linéaire : Autoencoder (AE)
+
+L'Autoencoder projette les données de manière non linéaire dans un espace latent continu via un réseau de neurones encodeur, et reconstruit les images via un décodeur. Le codebook est constitué des poids et biais du décodeur.
+
+### Impact de la Dimension Latente (MNIST)
+
+Nous avons entraîné un Autoencoder MLP avec 3 couches pour l'encodeur et le décodeur, et une fonction d'activation ReLU.
+
+![Balayage dimensions latentes AE MNIST](report_assets/03_autoencoder_cell18_out0.png){width=85%}
+
+* **Compromis Qualité / Compression** :
+  * Pour $latent\_dim = 2$ : MSE de $0.0439$. Les images reconstruites sont floues mais capturent l'orientation globale.
+  * Pour $latent\_dim = 16$ : MSE de $0.0152$. Les chiffres deviennent lisibles.
+  * Pour $latent\_dim = 64$ : MSE de $0.0068$. La netteté est comparable à l'original.
+* **Comparaison PCA vs AE** : À dimension latente équivalente faible (ex: $N=2$), l'AE non linéaire bat largement la PCA en termes de distorsion visuelle, car il est capable de plier et de tordre l'espace pour maximiser l'utilisation de ses dimensions.
+
+### Choix de la Perte et des Fonctions d'Activation
+
+L'expérimentation montre que le couple (Perte, Activation de sortie) est critique pour la convergence :
+* L'utilisation de la perte **MSE** avec une activation de sortie linéaire ou Sigmoid donne des reconstructions stables.
+* La perte **L1** favorise des reconstructions plus contrastées au prix de gradients instables près de zéro.
+* L'activation **Tanh** s'est révélée sous-optimale dans nos configurations car elle sature rapidement et ralentit fortement l'apprentissage par rapport à la **ReLU** ou **LeakyReLU**.
+
+![Activation et Perte AE](report_assets/03_autoencoder_cell20_out0.png){width=85%}
+
+### Application sur Shapes (MLP vs Conv)
+
+Sur le jeu de données Shapes, l'Autoencoder linéaire/MLP rencontre des difficultés à capturer les contours nets des formes géométriques. L'intégration de couches convolutives (avec prior spatial de voisinage) permet d'obtenir des contours bien plus nets et une meilleure conservation des couleurs locales, tout en réduisant le nombre de paramètres du modèle (grâce au partage des poids des filtres).
+
+![Reconstruction AE Shapes](report_assets/03_autoencoder_cell32_out0.png){width=85%}
+
+---
+
+## Carte Auto-Organisatrice : SOM (Self-Organizing Map)
+
+La carte de Kohonen (SOM) est un réseau de neurones non supervisé qui projette les données sur une grille bidimensionnelle discrète en préservant la topologie. Deux neurones voisins sur la grille auront des poids proches dans l'espace des données.
+
+### Expérimentation sur MNIST (Grille 10x10)
+
+Nous avons entraîné une carte SOM de $10 \times 10$ neurones sur MNIST pendant $5000$ itérations.
+
+![Grille SOM MNIST](report_assets/som_mnist_grid.png){width=75%}
+
+![Reconstruction SOM MNIST](report_assets/som_mnist_reconstruction.png){width=95%}
+
+* **Organisation Topologique** : L'examen de la grille des poids des neurones montre une transition fluide entre les chiffres. Par exemple, les neurones représentant des `0` se situent dans un coin et se transforment graduellement en `8`, puis en `3` et en `9` à mesure qu'on se déplace sur la carte.
+* **Erreur de Quantification et Topologique** :
+  * Quantization Error (QE) : $5.3012$.
+  * Topographic Error (TE) : $0.4085$ (indique que $40.8\%$ des échantillons ont leur deuxième neurone le plus proche non adjacent au premier sur la grille).
+
+### Expérimentation sur Shapes : Grille 10x10 vs 30x30
+
+La SOM a été appliquée sur les données Shapes en comparant deux topologies de grille.
+
+#### Grille 10x10 (100 neurones)
+* **Poids de la grille** : Les neurones capturent principalement des formes floues associées à des couleurs pures (aplats rouges, bleus, verts).
+* **Reconstruction** : MSE de $0.0206$, avec un excellent ratio de compression ($99.19$).
+
+![Grille SOM Shapes 10x10](report_assets/som_shapes_grid.png){width=80%}
+
+![Reconstruction SOM Shapes 10x10](report_assets/som_shapes_reconstruction.png){width=95%}
+
+#### Grille 30x30 (900 neurones)
+* **Poids de la grille** : L'augmentation de la taille de la grille permet aux neurones de se spécialiser. Les formes géométriques (triangles, losanges, croix) apparaissent très nettement sur la carte avec des contours bien définis.
+* **Reconstruction** : La MSE s'améliore à $0.0162$, mais le ratio de compression s'effondre à $11.09$ en raison de la taille du dictionnaire de poids à stocker ($11$ Mo contre $1.2$ Mo pour la 10x10).
+
+![Grille SOM Shapes 30x30](report_assets/som_shapes_grid_30.png){width=95%}
+
+![Reconstruction SOM Shapes 30x30](report_assets/som_shapes_reconstruction_30.png){width=95%}
+
+---
+
+## Modèle Génératif Régularisé : VAE (Variational Autoencoder)
+
+Le VAE régularise l'espace latent en forçant sa distribution à s'approcher d'une distribution normale standard $\mathcal{N}(0, I)$ à l'aide d'une perte de divergence de Kullback-Leibler (KL). Cela garantit l'absence de "trous" dans l'espace latent et permet de générer des données par simple échantillonnage aléatoire.
+
+### Évaluation sur MNIST
+
+Nous avons comparé un VAE et un Autoencoder standard (tous deux avec un espace latent continu de dimension 2).
+
+![Espace Latent VAE MNIST](report_assets/05_vae_cell12_out0.png){width=80%}
+
+![Génération VAE MNIST](report_assets/05_vae_cell14_out0.png){width=95%}
+
+* **Régularisation de l'espace latent** : L'espace latent du VAE se concentre de manière très compacte autour de l'origine (moyenne proche de 0, variance proche de 1).
+* **Qualité de reconstruction (Coût de la régularisation)** :
+  * AE MSE : $0.0490$.
+  * VAE MSE : $0.0482$.
+  La perte de qualité est ici minime, mais le VAE offre la capacité unique de générer des images par échantillonnage gaussien de l'espace latent, alors que l'AE génère des images aberrantes si l'on échantillonne dans des zones vides.
+* **Interpolation** : La transition entre les codes latents de deux chiffres réels produit un morphing continu et réaliste (ex: passage fluide d'un 1 à un 0).
+
+### Évaluation sur Shapes
+
+Sur le dataset Shapes, la contrainte de régularisation conduit à un espace latent 2D régulier ($KL = 6.011$).
+
+![Reconstruction VAE Shapes](report_assets/05_vae_cell30_out1.png){width=85%}
+
+Bien que la reconstruction 2D soit légèrement lissée (effet de flou inhérent à la perte MSE combinée à la contrainte KL), le modèle parvient à préserver la structure globale de l'image et permet d'interpoler continûment entre différentes couleurs et formes géométriques.
+
+---
+
+## Modèle Génératif Adversarial : GAN (Generative Adversarial Network)
+
+Le GAN oppose un générateur $G$, qui produit une image à partir d'un bruit latent $z \sim \mathcal{N}(0, I)$, à un discriminateur $D$, qui apprend à séparer les vraies images des fausses. Les deux réseaux sont des perceptrons multicouches : $G$ va de $100$ à $3072$ dimensions ($100 \to 256 \to 512 \to 1024 \to 3072$), $D$ fait le chemin inverse ($3072 \to 512 \to 256 \to 1$).
+
+Il n'existe aucune fonction $x \to z$. Cette absence d'encodeur structure toute l'évaluation : la génération est directe, les deux autres tâches demandent un détour.
+
+| Tâche | Moyen |
+|---|---|
+| Génération | `generate()` : $z \to G(z)$ |
+| Compression / Décompression | `invert()` puis `decode()` : descente de gradient sur $z$ à $G$ figé |
+| Projection | `extract_features()` : dernière couche cachée de $D$ |
+
+### Dynamique d'Entraînement (MNIST)
+
+Sans précaution, le discriminateur gagne la partie. Notre première configuration a vu sa loss tomber à $0.0$ pendant que celle du générateur divergeait vers $13.5$ : $D$ saturé ne renvoie plus de gradient, et $G$ cesse d'apprendre. Les images produites étaient des taches.
+
+Deux réglages ont rétabli l'équilibre :
+
+* **Handicaper $D$** : `Dropout(0.3)` entre ses couches cachées et `LeakyReLU(0.2)`.
+* **Forme non saturante de la perte** : $G$ maximise $\log D(G(z))$ au lieu de minimiser $\log(1 - D(G(z)))$. La formulation d'origine annule le gradient de $G$ précisément quand il est le plus mauvais.
+
+Après $60$ epochs, l'accuracy de $D$ se stabilise à $0.627$ — au-dessus du $0.5$ visé, la partie reste à son avantage — et la variance des images générées plafonne à $0.253$ sans s'effondrer. Les chiffres produits sont nets et variés : écart-type inter-images de $0.175$ contre $0.193$ sur les vraies données.
+
+![Courbes GAN MNIST](report_assets/06_gan_cell6_out0.png){width=80%}
+
+![Images Générées GAN MNIST](report_assets/06_gan_cell12_out0.png){width=95%}
+
+### Application sur Shapes
+
+La même configuration a été rejouée sur Shapes à budget identique : $60$ epochs, dimension latente $100$, les $10\,000$ images du pipeline partagé.
+
+![Courbes GAN Shapes](report_assets/06_gan_shapes_vanilla_cell6_out0.png){width=80%}
+
+**Les métriques d'équilibre sont meilleures que sur MNIST.** L'accuracy de $D$ se cale à $0.549$, presque le $0.5$ théorique, contre $0.627$ sur MNIST. La variance de $G$ monte de $0.002$ à $0.123$ et s'y maintient. Les deux losses se stabilisent, celle de $D$ à $1.37$, celle de $G$ oscillant entre $0.74$ et $0.93$. Aucun signe de saturation ni de mode collapse.
+
+![Métriques d'équilibre GAN Shapes](report_assets/06_gan_shapes_vanilla_cell9_out0.png){width=95%}
+
+**Les images, elles, sont mauvaises.** Aucune des six formes n'est identifiable : $G$ produit des taches de couleur compactes sur fond sombre. Ce n'est pas un défaut de diversité — l'écart-type inter-images atteint $0.1595$ contre $0.1765$ sur les vraies données, soit $90\%$ de la diversité réelle, et les $64$ tirages indépendants varient bien en couleur, en taille et en position. Les images sont variées et fausses.
+
+![Images Générées GAN Shapes](report_assets/06_gan_shapes_vanilla_cell12_out0.png){width=95%}
+
+L'interpolation latente le confirme : le passage de $z_a$ à $z_b$ est continu, une tache rouge se déforme progressivement en tache bleue sans discontinuité. $G$ a donc appris une variété continue, et non une mémorisation du train, mais c'est une variété de taches.
+
+![Interpolation latente GAN Shapes](report_assets/06_gan_shapes_vanilla_cell17_out0.png){width=95%}
+
+**Diagnostic.** Le contraste entre les métriques et les images est le résultat le plus instructif de cette expérimentation. Un $D$ qui plafonne à $0.549$ face à des images qu'un observateur rejette au premier coup d'œil ne signifie pas que $G$ est bon, mais que $D$ est aveugle. Un MLP reçoit $3072$ pixels sans aucune notion de voisinage : il n'a aucun moyen de représenter un bord. Il juge donc sur des statistiques globales de couleur, que $G$ n'a qu'à reproduire pour gagner. L'équilibre est atteint par le bas.
+
+Sur MNIST cela suffisait, les traits blancs sur fond noir étant largement portés par ces statistiques ; la géométrie de Shapes ne l'est pas. Le correctif qui avait débloqué MNIST — affaiblir $D$ — ne s'applique donc pas ici : le problème n'est pas un déséquilibre, mais un manque de capacité représentationnelle.
+
+### Reconstruction par Recherche de Code Latent
+
+Le générateur est un décodeur $z \to x$, mais rien ne code une image existante. Pour obtenir le code d'une image réelle $x$, il faut le chercher : $G$ est figé et une descente de gradient de $300$ pas est menée sur $z$ lui-même pour minimiser $\|G(z) - x\|^2$. C'est `GAN.invert()`. Ce n'est pas un encodeur — l'AutoEncoder code en une seule passe avant.
+
+La référence de comparaison est un AutoEncoder à dimension latente identique ($100$), pour que l'écart mesure bien le modèle et non la taille du code.
+
+#### MNIST ($N = 1000$)
+
+| | MSE | Codebook | Ratio |
+|---|---|---|---|
+| GAN ($d = 100$) | $0.0209$ | $5\,945\,408$ o | $0.49$ |
+| AutoEncoder ($d = 100$) | $0.0105$ | $1\,632\,336$ o | $1.54$ |
+
+La reconstruction retrouve la plupart des chiffres. Certains échouent et dégénèrent en tache : ces images n'ont aucun antécédent dans l'espace latent, $G$ est incapable de les produire quel que soit $z$. Un AutoEncoder, entraîné à couvrir toutes les données, reconstruit toujours quelque chose de l'entrée même flou ; le GAN n'a pas cette contrainte — il lui suffit de tromper $D$ — et peut ignorer une partie du dataset sans être pénalisé. C'est le *mode dropping*.
+
+Le ratio inférieur à $1$ tient au faible effectif : sur $1000$ images, les poids de $G$ pèsent plus lourd que les données d'origine. Ce coût est fixe et s'amortit, le seuil de rentabilité étant de $2173$ images pour un plafond théorique de $7.84$.
+
+#### Shapes ($N = 10\,000$)
+
+| | MSE | Codebook | Ratio |
+|---|---|---|---|
+| GAN ($d = 100$) | $0.01866$ | $15\,326\,208$ o | $6.36$ |
+| AutoEncoder ($d = 100$) | $0.00477$ | $13\,411\,860$ o | $7.06$ |
+
+![Reconstruction GAN Shapes](report_assets/06_gan_shapes_vanilla_cell20_out0.png){width=95%}
+
+Le GAN est dominé sur les deux axes, ce qui n'était pas le cas sur MNIST où il perdait en qualité mais gardait un codebook du même ordre. Sa MSE est $3.9$ fois supérieure à celle de l'AutoEncoder, et ses poids pèsent $15.3$ Mo contre $13.4$ Mo, d'où un ratio inférieur. Un troisième coût n'apparaît pas dans le tableau : les $100$ valeurs latentes du GAN demandent $300$ pas de gradient par image, contre une passe avant pour l'AE.
+
+Les reconstructions échouent de la même façon que la génération : ce sont des taches. Elles retrouvent la couleur dominante, la taille et la position approximative de l'objet, jamais sa forme — un losange bleu devient une tache bleue, une croix jaune une tache jaune. Ce résultat est plus tranchant que celui de la génération : l'inversion est une descente de gradient dédiée à une seule image ; si un $z$ produisant cette croix existait, l'optimisation aurait toutes les chances de le trouver. Elle ne le trouve pas. Le problème ne vient donc pas du tirage de $z$, mais de $G$, qui ne sait produire aucune forme.
+
+![Amortissement du codebook GAN Shapes](report_assets/06_gan_shapes_vanilla_cell24_out0.png){width=80%}
+
+Le seuil de rentabilité tombe ici à $1289$ images — le gain par image est plus grand que sur MNIST, $3072$ valeurs remplacées par $100$ — pour un plafond théorique de $30.72$ une fois le codebook amorti. Mais l'AutoEncoder reste au-dessus du GAN sur toute la plage : son codebook étant plus léger, l'écart ne se résorbe jamais. Contrairement à MNIST, il n'existe aucun régime où le GAN devient le meilleur choix en compression.
+
+Point de méthode : l'AutoEncoder de référence est ici entraîné $150$ epochs. Avec les $15$ epochs utilisées sur MNIST il n'a pas convergé sur Shapes, et le GAN s'en rapproche — la comparaison ne mesurerait alors qu'un budget inégal. Une référence sous-entraînée n'est pas une référence.
+
+### Projection par les Features du Discriminateur
+
+$G$ ne projette rien, mais $D$ prend une image en entrée et s'est construit des descripteurs internes pour juger du vrai et du faux. Sa dernière couche cachée ($256$ dimensions) peut donc servir d'extracteur, ensuite réduite en 2D par PCA. Référence : PCA appliquée directement aux pixels bruts.
+
+| kNN (15 voisins) sur 2 composantes | MNIST | Shapes |
+|---|---|---|
+| Pixels bruts | $0.441$ | $0.245$ |
+| Features de $D$ | $0.430$ | $0.249$ |
+| Hasard | $0.100$ | $0.167$ |
+
+![Projections GAN Shapes](report_assets/06_gan_shapes_vanilla_cell27_out0.png){width=95%}
+
+Le détour n'apporte rien, sur aucun des deux jeux : l'écart est dans le bruit de la validation croisée. La raison est la même dans les deux cas — $D$ a été entraîné à séparer « réelle » de « fausse », pas à séparer les classes. Rien dans sa perte ne l'encourage à distinguer un carré d'une étoile, les deux étant de vraies images.
+
+Sur Shapes, les deux projections sont de plus proches du hasard ($0.167$). En 2 composantes, la forme géométrique n'est pas séparable, quelle que soit la représentation : la variance dominante du dataset est portée par la couleur, la taille et la position de l'objet, pas par sa géométrie. Le K-Means à $K = 6$ atteignait $26.29\%$ sur le même lot, du même ordre de grandeur — la difficulté vient du dataset autant que du GAN.
+
+### Bilan du GAN
+
+| Tâche | MNIST | Shapes |
+|---|---|---|
+| Génération | Adapté — chiffres nets et variés | Échec — aucune des 6 formes identifiable, diversité pourtant intacte |
+| Compression | Possible mais coûteux et incomplet — MSE $2\times$ celle de l'AE, ratio $< 1$ sous $2173$ images | Échec — MSE $3.9\times$ celle de l'AE, codebook plus lourd, ratio inférieur |
+| Projection | Non adapté — $0.430$ contre $0.441$ | Non adapté — $0.249$ contre $0.245$, proche du hasard |
+
+Le GAN vanilla réussit la génération sur MNIST et échoue sur les trois tâches sur Shapes. La cause est unique et mesurée deux fois : $G$ ne produit aucune géométrie, que $z$ soit tiré dans le prior ou recherché par descente de gradient.
+
+Deux enseignements de méthode ressortent de ces mesures :
+
+1. **Les métriques d'équilibre ne mesurent pas la qualité.** L'expérimentation Shapes affiche l'accuracy de $D$ la plus proche de $0.5$ de tout le projet et produit les pires images. L'égalité entre $D$ et $G$ peut être obtenue par le bas.
+2. **Un correctif ne vaut que contre la pathologie qu'il vise.** Le dropout qui a débloqué MNIST répondait à un $D$ trop fort. Sur Shapes, $D$ n'est pas trop fort, il est aveugle : un MLP n'a aucune notion de voisinage, donc aucun moyen de représenter un bord. Le manque est un prior spatial.
+
+---
+
+## Synthèse Comparative Globale
+
+Le tableau ci-dessous regroupe les performances moyennes de reconstruction et d'efficacité de stockage des différents modèles sur la base d'évaluation.
+
+### Tableau de comparaison sur MNIST (N=10 000 échantillons)
+
+| Modèle | Nature Latent | Dim. Latente / Grille | Taille Codebook (octets) | Taille Latente (octets) | Ratio de Compression | MSE de Reconstruction | Capacité de Génération |
+|---|---|---|---|---|---|---|---|
+| **K-Means** | Discret | $K=10$ | $31\ 360$ | $10\ 000$ | $758.22$ | $0.0495$ | Non (uniquement centroïdes) |
+| **K-Means** | Discret | $K=512$ | $1\ 605\ 632$ | $10\ 000$ | $19.30$ | $0.0263$ | Non (uniquement centroïdes) |
+| **PCA** | Continu | $N=87$ | $275\ 968$ | $3\ 480\ 000$ | $8.35$ | **$0.0065$** | Non (espace mal régularisé) |
+| **Autoencoder**| Continu | $d=2$ | $345\ 276$ | $24\ 000$ (eval) | $25.48$ | $0.0439$ | Non (trous dans l'espace) |
+| **SOM** | Discret | $10 \times 10$ | $313\ 600$ | $10\ 000$ | $96.91$ | $0.0376$ | Non (grille discrète) |
+| **VAE** | Continu | $d=2$ | $345\ 276$ | $24\ 000$ (eval) | $25.48$ | $0.0482$ | **Oui** (Échantillonnage gaussien) |
+| **GAN (MLP)** | Continu | $d=100$ | $5\ 945\ 408$ | $400\ 000$ (eval)| $0.49$ | $0.0209$ | **Oui** (Nette mais incomplète) |
+
+Le GAN est évalué sur $N = 1000$ images et non $10\,000$ : son ratio n'est donc pas directement comparable aux autres lignes. Son codebook amorti sur $10\,000$ images donnerait $3.15$.
+
+### Tableau de comparaison sur Shapes (N=10 000 échantillons)
+
+| Modèle | Nature Latent | Dim. Latente / Grille | Taille Codebook (octets) | Taille Latente (octets) | Ratio de Compression | MSE de Reconstruction | Limites et Remarques |
+|---|---|---|---|---|---|---|---|
+| **K-Means** | Discret | $K=6$ | $73\ 728$ | $10\ 000$ | **$1467.61$** | $0.0277$ | Groupement par couleur uniquement. |
+| **K-Means** | Discret | $K=512$ | $6\ 291\ 456$ | $10\ 000$ | $19.50$ | $0.0163$ | Toujours insensible aux classes. |
+| **PCA** | Continu | $N=513$ | $6\ 316\ 032$ | $20\ 520\ 000$ | $4.58$ | **$0.0029$** | Excellente qualité mais très lourd. |
+| **Autoencoder**| Continu | $d=2$ | $3\ 306\ 708$ | $24\ 000$ (eval) | $11.07$ | $0.0266$ | Flou géométrique modéré. |
+| **SOM** | Discret | $10 \times 10$ | $1\ 228\ 800$ | $10\ 000$ | $99.19$ | $0.0206$ | Représente des taches de couleur. |
+| **SOM** | Discret | $30 \times 30$ | $11\ 059\ 200$ | $20\ 000$ | $11.09$ | $0.0162$ | Formes géométriques nettes apprises. |
+| **VAE** | Continu | $d=2$ | $3\ 306\ 708$ | $24\ 000$ (eval) | $11.07$ | $0.0284$ | Génération continue par morphing. |
+| **GAN (MLP)** | Continu | $d=100$ | $15\ 326\ 208$ | $4\ 000\ 000$ | $6.36$ | $0.0187$ | Taches de couleur, aucune géométrie. |
+
+---
+
+## Conclusion
+
+Ce projet met en évidence qu'il n'existe pas d'algorithme universel d'apprentissage non supervisé ; le choix dépend du compromis recherché entre fidélité de reconstruction, taux de compression et capacité générative.
+
+1. **Pour la compression pure** : Les méthodes discrètes comme **K-Means** et la **SOM 10x10** offrent les ratios de compression les plus élevés (supérieurs à 100 ou 1000) mais au prix d'une perte d'information importante (la reconstruction est une image moyenne).
+2. **Pour la fidélité de reconstruction** : La **PCA** est extrêmement performante et rapide à calculer lorsque le nombre de composantes est grand ($N > 400$). Cependant, sa nature linéaire la rend très lourde en stockage individuel. Les **Autoencoders** (surtout convolutifs) s'imposent comme le meilleur compromis non linéaire, offrant une excellente MSE à faible dimension latente.
+3. **Pour la génération de données** : Le **VAE** se distingue par la régularité mathématique de son espace latent, ce qui en fait l'outil adapté à l'interpolation et au morphing. Le **GAN** produit des images plus nettes lorsqu'il converge : ne minimisant aucune MSE, il n'a pas de raison de moyenner les sorties possibles, là où l'AutoEncoder rend du flou. Sa contrepartie est lourde — entraînement instable, reconstruction coûteuse ($300$ pas de gradient par image) et sans garantie de couverture du dataset. Sur Shapes, notre GAN vanilla en MLP n'a pas dépassé le stade des taches de couleur, faute de prior spatial dans le discriminateur.

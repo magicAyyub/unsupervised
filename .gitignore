@@ -13,6 +13,7 @@ wheels/
 data/
 notebooks/data/
 shapes_hard_color/
+report_assets/
 
 # Cached fitted models
 artifacts/
